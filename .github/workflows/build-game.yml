@@ -1,0 +1,45 @@
+
+name: Build Airport Escape Room
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get game files
+        uses: actions/checkout@v4
+
+      - name: Download Tweego
+        run: |
+          URL=$(curl -fsSL https://api.github.com/repos/tmedwards/tweego/releases/latest \
+            | jq -r '.assets[] | select(.name | test("linux.*(x64|amd64|64bit|64-bit)"; "i")) | .browser_download_url' \
+            | head -n 1)
+          test -n "$URL"
+          curl -fL "$URL" -o /tmp/tweego.zip
+          mkdir -p /tmp/tweego
+          unzip -q /tmp/tweego.zip -d /tmp/tweego
+          find /tmp/tweego -name tweego -type f -exec chmod +x {} \;
+          echo "$(dirname "$(find /tmp/tweego -name tweego -type f | head -n 1)")" >> "$GITHUB_PATH"
+
+      - name: Build playable game
+        run: |
+          if [ ! -f story-source.html ]; then
+            cp index.html story-source.html
+          fi
+          tweego -f sugarcube-2 -o /tmp/playable-game.html story-source.html
+          test -s /tmp/playable-game.html
+          cp /tmp/playable-game.html index.html
+
+      - name: Save playable website
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html story-source.html
+          git diff --cached --quiet || git commit -m "Build playable airport escape room"
+          git push
